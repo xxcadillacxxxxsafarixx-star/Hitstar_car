@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#1D9E75">
+<title>Hitster Scoreboard</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Hitster">
+<style>
+  :root {
+    --bg: #f5f4f0;
+    --card: #ffffff;
+    --border: #e2e0d8;
+    --border-strong: #c9c6ba;
+    --text: #1a1a18;
+    --text-secondary: #6b6a63;
+    --text-muted: #9a988e;
+    --accent: #0f6e56;
+    --accent-bg: #e1f5ee;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 1.25rem;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    max-width: 480px;
+    margin-left: auto;
+    margin-right: auto;
+    padding-bottom: 3rem;
+  }
+  h1 {
+    font-size: 20px;
+    font-weight: 600;
+    margin: 0 0 1.25rem;
+    text-align: center;
+  }
+  .card {
+    background: var(--card);
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+  }
+  .label {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin: 0 0 4px;
+  }
+  .title {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0 0 1rem;
+  }
+  input {
+    width: 100%;
+    height: 44px;
+    padding: 0 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border-strong);
+    background: #fff;
+    font-size: 16px;
+    color: var(--text);
+  }
+  input:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+  button {
+    width: 100%;
+    height: 48px;
+    border-radius: 8px;
+    border: 1px solid var(--border-strong);
+    background: var(--accent);
+    color: #fff;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button:active { transform: scale(0.98); }
+  button.secondary {
+    background: #fff;
+    color: var(--text);
+    height: 36px;
+    font-size: 13px;
+    font-weight: 500;
+  }
+  button.secondary.active {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .row span.pname { font-size: 14px; min-width: 90px; }
+  .error {
+    font-size: 13px;
+    color: #b3261e;
+    margin: 8px 0 0;
+    display: none;
+  }
+  .reveal-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-top: 1px solid var(--border);
+  }
+  .reveal-row:first-of-type { border-top: none; }
+  .reveal-left { display: flex; flex-direction: column; }
+  .reveal-left .pname { font-size: 14px; font-weight: 500; }
+  .reveal-left .guess { font-size: 12px; color: var(--text-muted); }
+  .points { font-size: 15px; font-weight: 600; color: var(--accent); min-width: 28px; text-align: right; }
+  .scoregrid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0,1fr));
+    gap: 8px;
+    margin-top: 0.5rem;
+  }
+  .scorecell {
+    background: var(--accent-bg);
+    border-radius: 8px;
+    padding: 0.75rem;
+    text-align: center;
+  }
+  .scorecell.leading { border: 2px solid var(--accent); }
+  .scorecell p { margin: 0; }
+  .scorecell .sname { font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
+  .scorecell .sval { font-size: 20px; font-weight: 700; }
+</style>
+</head>
+<body>
+<h1>Hitster Scoreboard</h1>
+<div id="app"></div>
+
+<script>
+let state = {
+  phase: 'setup',
+  players: ['', '', ''],
+  scores: [0,0,0],
+  round: 1,
+  guesses: ['', '', ''],
+  correctYear: '',
+  roundPoints: [0,0,0],
+  bonusGiven: [false,false,false]
+};
+
+function el(html) {
+  const d = document.createElement('div');
+  d.innerHTML = html.trim();
+  return d.firstElementChild;
+}
+
+function render() {
+  const app = document.getElementById('app');
+  app.innerHTML = '';
+  if (state.phase === 'setup') app.appendChild(renderSetup());
+  else if (state.phase === 'guessing') app.appendChild(renderGuessing());
+  else if (state.phase === 'correct') app.appendChild(renderCorrect());
+  else if (state.phase === 'reveal') app.appendChild(renderReveal());
+}
+
+function renderSetup() {
+  const wrap = el('<div></div>');
+  const card = el('<div class="card"></div>');
+  card.appendChild(el('<p class="label">Namen der 3 Spieler eingeben</p>'));
+  state.players.forEach((p, i) => {
+    const row = el('<div style="margin-bottom:12px;"></div>');
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.placeholder = 'Spieler ' + (i+1);
+    input.value = p;
+    input.oninput = (e) => { state.players[i] = e.target.value; };
+    row.appendChild(input);
+    card.appendChild(row);
+  });
+  const err = el('<p class="error">Bitte alle 3 Namen eingeben</p>');
+  card.appendChild(err);
+  const btn = el('<button style="margin-top:8px;">Spiel starten</button>');
+  btn.onclick = () => {
+    if (state.players.some(p => !p.trim())) { err.style.display = 'block'; return; }
+    state.guesses = ['', '', ''];
+    state.phase = 'guessing';
+    render();
+  };
+  card.appendChild(btn);
+  wrap.appendChild(card);
+  return wrap;
+}
+
+function renderGuessing() {
+  const wrap = el('<div></div>');
+  wrap.appendChild(el('<p class="label">Runde ' + state.round + '</p>'));
+  const card = el('<div class="card"></div>');
+  card.appendChild(el('<p class="title">Geschätzte Jahre eingeben</p>'));
+  const err = el('<p class="error">Bitte für alle Spieler ein Jahr eingeben</p>');
+  state.players.forEach((p, i) => {
+    const row = el('<div class="row"></div>');
+    row.appendChild(el('<span class="pname">' + p + '</span>'));
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.inputMode = 'numeric';
+    input.placeholder = 'Jahr';
+    input.value = state.guesses[i];
+    input.oninput = (e) => { state.guesses[i] = e.target.value; err.style.display='none'; };
+    row.appendChild(input);
+    card.appendChild(row);
+  });
+  card.appendChild(err);
+  const btn = el('<button style="margin-top:4px;">Weiter</button>');
+  btn.onclick = () => {
+    if (state.guesses.some(g => g === '' || isNaN(Number(g)))) { err.style.display = 'block'; return; }
+    state.correctYear = '';
+    state.phase = 'correct';
+    render();
+  };
+  card.appendChild(btn);
+  wrap.appendChild(card);
+  return wrap;
+}
+
+function renderCorrect() {
+  const wrap = el('<div></div>');
+  wrap.appendChild(el('<p class="label">Runde ' + state.round + '</p>'));
+  const card = el('<div class="card"></div>');
+  card.appendChild(el('<p class="title">Richtiges Jahr eingeben</p>'));
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.inputMode = 'numeric';
+  input.placeholder = 'Jahr laut Spotify';
+  input.value = state.correctYear;
+  const err = el('<p class="error">Bitte ein Jahr eingeben</p>');
+  input.oninput = (e) => { state.correctYear = e.target.value; err.style.display='none'; };
+  card.appendChild(input);
+  card.appendChild(err);
+  const btn = el('<button style="margin-top:12px;">Punkte berechnen</button>');
+  btn.onclick = () => {
+    if (state.correctYear === '' || isNaN(Number(state.correctYear))) { err.style.display = 'block'; return; }
+    calcRoundPoints();
+    state.bonusGiven = [false,false,false];
+    state.phase = 'reveal';
+    render();
+  };
+  card.appendChild(btn);
+  wrap.appendChild(card);
+  return wrap;
+}
+
+function calcRoundPoints() {
+  const correct = Number(state.correctYear);
+  const diffs = state.guesses.map(g => Math.abs(Number(g) - correct));
+  const sorted = [...diffs].sort((a,b) => a-b);
+  const best = sorted[0];
+  const second = sorted.find(d => d > best);
+  state.roundPoints = diffs.map(d => {
+    if (d === best) return 2;
+    if (second !== undefined && d === second) return 1;
+    return 0;
+  });
+}
+
+function renderReveal() {
+  const wrap = el('<div></div>');
+  wrap.appendChild(el('<p class="label">Runde ' + state.round + ' &middot; richtig: ' + state.correctYear + '</p>'));
+  const card = el('<div class="card"></div>');
+  card.appendChild(el('<p class="title">Rundenpunkte</p>'));
+  state.players.forEach((p, i) => {
+    const row = el('<div class="reveal-row"></div>');
+    const left = el('<div class="reveal-left"></div>');
+    left.appendChild(el('<span class="pname">' + p + '</span>'));
+    left.appendChild(el('<span class="guess">Geschätzt: ' + state.guesses[i] + '</span>'));
+    row.appendChild(left);
+    const right = el('<div style="display:flex;align-items:center;gap:8px;"></div>');
+    right.appendChild(el('<span class="points">+' + state.roundPoints[i] + '</span>'));
+    const bonusBtn = document.createElement('button');
+    bonusBtn.className = 'secondary' + (state.bonusGiven[i] ? ' active' : '');
+    bonusBtn.style.width = 'auto';
+    bonusBtn.style.padding = '0 10px';
+    bonusBtn.textContent = state.bonusGiven[i] ? 'Bonus ✓' : 'Titel+Interpret';
+    bonusBtn.onclick = () => {
+      state.bonusGiven[i] = !state.bonusGiven[i];
+      render();
+    };
+    right.appendChild(bonusBtn);
+    row.appendChild(right);
+    card.appendChild(row);
+  });
+  wrap.appendChild(card);
+
+  const nextBtn = el('<button>Nächste Runde</button>');
+  nextBtn.onclick = () => {
+    state.players.forEach((p, i) => {
+      state.scores[i] += state.roundPoints[i] + (state.bonusGiven[i] ? 2 : 0);
+    });
+    state.round += 1;
+    state.guesses = ['', '', ''];
+    state.phase = 'guessing';
+    render();
+  };
+  wrap.appendChild(nextBtn);
+
+  const scoreWrap = el('<div style="margin-top:1.25rem;"></div>');
+  scoreWrap.appendChild(el('<p class="label">Gesamtstand</p>'));
+  const grid = el('<div class="scoregrid"></div>');
+  const maxScore = Math.max(...state.scores);
+  state.players.forEach((p, i) => {
+    const leading = state.scores[i] === maxScore && maxScore > 0;
+    const cell = el('<div class="scorecell' + (leading ? ' leading' : '') + '"></div>');
+    cell.appendChild(el('<p class="sname">' + p + '</p>'));
+    cell.appendChild(el('<p class="sval">' + state.scores[i] + '</p>'));
+    grid.appendChild(cell);
+  });
+  scoreWrap.appendChild(grid);
+  wrap.appendChild(scoreWrap);
+
+  return wrap;
+}
+
+render();
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
+</script>
+</body>
+</html>
