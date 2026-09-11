@@ -152,9 +152,48 @@
   .scorebar-cell.leading { border: 2px solid var(--accent); }
   .scorebar-cell .sname { font-size: 11px; color: var(--text-secondary); margin: 0 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .scorebar-cell .sval { font-size: 17px; font-weight: 700; margin: 0; }
+  select {
+    width: 100%;
+    height: 44px;
+    padding: 0 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border-strong);
+    background: #fff;
+    font-size: 16px;
+    color: var(--text);
+  }
+  .reset-corner-btn {
+    position: fixed;
+    top: 14px;
+    right: 14px;
+    width: auto;
+    height: 32px;
+    padding: 0 12px;
+    font-size: 12px;
+    font-weight: 500;
+    border-radius: 20px;
+    background: #fff;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-strong);
+    z-index: 20;
+  }
+  .final-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 0;
+    border-top: 1px solid var(--border);
+  }
+  .final-row:first-of-type { border-top: none; }
+  .final-row .fname { font-size: 16px; font-weight: 500; }
+  .final-row .fplace { font-size: 13px; color: var(--text-muted); margin-right: 8px; }
+  .final-row .fscore { font-size: 20px; font-weight: 700; color: var(--accent); }
+  .final-row.winner { background: var(--accent-bg); border-radius: 8px; padding-left: 10px; padding-right: 10px; margin: 0 -10px; }
+  .trophy { font-size: 40px; text-align: center; margin-bottom: 0.5rem; }
 </style>
 </head>
 <body>
+<button id="resetCornerBtn" class="reset-corner-btn">↺ Reset</button>
 <h1>Hitster Scoreboard</h1>
 <div id="app"></div>
 <div id="scorebar" class="scorebar"><div id="scorebarInner" class="scorebar-inner"></div></div>
@@ -181,6 +220,7 @@ let state = loadState() || {
   playerCount: 3,
   players: ['', '', ''],
   scores: [0,0,0],
+  totalRounds: 10,
   round: 1,
   guesses: ['', '', ''],
   currentTrack: null,
@@ -202,11 +242,17 @@ function resetGame() {
   localStorage.removeItem(STORAGE_KEY);
   state = {
     phase: 'setup', playerCount: 3, players: ['', '', ''], scores: [0,0,0],
-    round: 1, guesses: ['', '', ''], currentTrack: null, roundPoints: [],
-    bonusTitle: [], bonusArtist: []
+    totalRounds: 10, round: 1, guesses: ['', '', ''], currentTrack: null,
+    roundPoints: [], bonusTitle: [], bonusArtist: []
   };
   render();
 }
+
+document.getElementById('resetCornerBtn').addEventListener('click', () => {
+  if (confirm('Spiel wirklich zurücksetzen? Alle Punkte und Einstellungen gehen verloren.')) {
+    resetGame();
+  }
+});
 
 function el(html) {
   const d = document.createElement('div');
@@ -224,6 +270,7 @@ function render() {
   else if (state.phase === 'resolving') app.appendChild(renderResolving());
   else if (state.phase === 'trackreveal') app.appendChild(renderTrackReveal());
   else if (state.phase === 'scoring') app.appendChild(renderScoring());
+  else if (state.phase === 'gameover') app.appendChild(renderGameOver());
   renderScorebar();
 }
 
@@ -245,6 +292,20 @@ function renderSetup() {
     countrow.appendChild(btn);
   }
   card.appendChild(countrow);
+
+  card.appendChild(el('<p class="label">Wie viele Runden?</p>'));
+  const roundSelect = document.createElement('select');
+  for (let r = 5; r <= 25; r++) {
+    const opt = document.createElement('option');
+    opt.value = r;
+    opt.textContent = r + ' Runden';
+    if (r === state.totalRounds) opt.selected = true;
+    roundSelect.appendChild(opt);
+  }
+  roundSelect.onchange = (e) => { state.totalRounds = Number(e.target.value); };
+  const roundRow = el('<div style="margin-bottom:1rem;"></div>');
+  roundRow.appendChild(roundSelect);
+  card.appendChild(roundRow);
 
   card.appendChild(el('<p class="label">Namen eingeben</p>'));
   state.players.forEach((p, i) => {
@@ -369,7 +430,7 @@ function renderSpotifyLogin() {
 /* ---------- GUESSING ---------- */
 function renderGuessing() {
   const wrap = el('<div></div>');
-  wrap.appendChild(el('<p class="label">Runde ' + state.round + '</p>'));
+  wrap.appendChild(el('<p class="label">Runde ' + state.round + ' von ' + state.totalRounds + '</p>'));
   const card = el('<div class="card"></div>');
   card.appendChild(el('<p class="title">Geschätzte Jahre eingeben</p>'));
   const err = el('<p class="error">Bitte für alle Spieler ein Jahr eingeben</p>');
@@ -466,7 +527,7 @@ function showRetryButton() {
 /* ---------- TRACK REVEAL ---------- */
 function renderTrackReveal() {
   const wrap = el('<div></div>');
-  wrap.appendChild(el('<p class="label">Runde ' + state.round + '</p>'));
+  wrap.appendChild(el('<p class="label">Runde ' + state.round + ' von ' + state.totalRounds + '</p>'));
   const card = el('<div class="card track-panel"></div>');
   const t = state.currentTrack;
   if (t.cover) card.appendChild(el('<img class="track-cover" src="' + t.cover + '" alt="Cover">'));
@@ -498,7 +559,7 @@ function calcRoundPoints() {
 function renderScoring() {
   const wrap = el('<div></div>');
   const t = state.currentTrack;
-  wrap.appendChild(el('<p class="label">Runde ' + state.round + ' &middot; ' + escapeHtml(t.title) + ' &ndash; ' + escapeHtml(t.artist) + ' (' + (t.year || '????') + ')</p>'));
+  wrap.appendChild(el('<p class="label">Runde ' + state.round + ' von ' + state.totalRounds + ' &middot; ' + escapeHtml(t.title) + ' &ndash; ' + escapeHtml(t.artist) + ' (' + (t.year || '????') + ')</p>'));
   const card = el('<div class="card"></div>');
   card.appendChild(el('<p class="title">Rundenpunkte</p>'));
   state.players.forEach((p, i) => {
@@ -527,11 +588,17 @@ function renderScoring() {
   });
   wrap.appendChild(card);
 
-  const nextBtn = el('<button>Nächste Runde</button>');
+  const isLastRound = state.round >= state.totalRounds;
+  const nextBtn = el('<button>' + (isLastRound ? 'Spiel beenden' : 'Nächste Runde') + '</button>');
   nextBtn.onclick = () => {
     state.players.forEach((p, i) => {
       state.scores[i] += state.roundPoints[i] + (state.bonusTitle[i] ? 1 : 0) + (state.bonusArtist[i] ? 1 : 0);
     });
+    if (isLastRound) {
+      state.phase = 'gameover';
+      render();
+      return;
+    }
     state.round += 1;
     state.guesses = state.players.map(() => '');
     state.currentTrack = null;
@@ -539,6 +606,35 @@ function renderScoring() {
     render();
   };
   wrap.appendChild(nextBtn);
+  return wrap;
+}
+
+/* ---------- GAME OVER ---------- */
+function renderGameOver() {
+  const wrap = el('<div></div>');
+  const card = el('<div class="card"></div>');
+  card.appendChild(el('<p class="trophy">🏆</p>'));
+  card.appendChild(el('<p class="title" style="text-align:center;">Endstand nach ' + state.totalRounds + ' Runden</p>'));
+
+  const ranked = state.players.map((p, i) => ({ name: p, score: state.scores[i] }))
+    .sort((a, b) => b.score - a.score);
+  const topScore = ranked.length ? ranked[0].score : 0;
+
+  ranked.forEach((r, idx) => {
+    const isWinner = r.score === topScore;
+    const row = el('<div class="final-row' + (isWinner ? ' winner' : '') + '"></div>');
+    const left = el('<div style="display:flex;align-items:center;"></div>');
+    left.appendChild(el('<span class="fplace">#' + (idx + 1) + '</span>'));
+    left.appendChild(el('<span class="fname">' + escapeHtml(r.name) + (isWinner ? ' 🏆' : '') + '</span>'));
+    row.appendChild(left);
+    row.appendChild(el('<span class="fscore">' + r.score + '</span>'));
+    card.appendChild(row);
+  });
+  wrap.appendChild(card);
+
+  const newGameBtn = el('<button>Neues Spiel</button>');
+  newGameBtn.onclick = () => { resetGame(); };
+  wrap.appendChild(newGameBtn);
   return wrap;
 }
 
