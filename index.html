@@ -626,21 +626,33 @@ async function spotifyApiCall(path, method) {
   return response;
 }
 
+// Lokal gemerkter Wiedergabestatus, um die Race Condition mit Spotifys
+// GET /me/player zu umgehen (der Status dort hinkt kurz nach einer Aktion
+// hinterher und führte sonst zu "UNKNOWN"-Fehlern beim Pausieren).
+let assumedIsPlaying = null;
+
 async function spotifyTogglePlayPause() {
   setPlaybackStatus("…");
   try {
-    const token = await getAccessToken();
-    const stateResp = await fetch("https://api.spotify.com/v1/me/player", {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    if (stateResp.status === 204) {
-      throw new Error("Kein aktives Gerät. Bitte Spotify auf dem Handy öffnen und einen Song starten.");
+    let isPlaying;
+    if (assumedIsPlaying === null) {
+      const token = await getAccessToken();
+      const stateResp = await fetch("https://api.spotify.com/v1/me/player", {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (stateResp.status === 204) {
+        throw new Error("Kein aktives Gerät. Bitte Spotify auf dem Handy öffnen und einen Song starten.");
+      }
+      const playerData = await stateResp.json();
+      isPlaying = !!playerData.is_playing;
+    } else {
+      isPlaying = assumedIsPlaying;
     }
-    const playerData = await stateResp.json();
-    const isPlaying = !!playerData.is_playing;
     await spotifyApiCall(isPlaying ? "/me/player/pause" : "/me/player/play", "PUT");
+    assumedIsPlaying = !isPlaying;
     setPlaybackStatus(isPlaying ? "Pausiert" : "Läuft");
   } catch (e) {
+    assumedIsPlaying = null;
     setPlaybackStatus(e.message);
   }
 }
@@ -649,8 +661,10 @@ async function spotifySkip(direction) {
   setPlaybackStatus("…");
   try {
     await spotifyApiCall("/me/player/" + direction, "POST");
+    assumedIsPlaying = true;
     setPlaybackStatus(direction === "next" ? "Nächster Song gestartet" : "Vorheriger Song gestartet");
   } catch (e) {
+    assumedIsPlaying = null;
     setPlaybackStatus(e.message);
   }
 }
@@ -760,6 +774,8 @@ function calcRoundPoints() {
 
 // Abwechselnd-Modus: nur eine Person rät pro Song, kein Vergleich moeglich.
 // Annahme: exaktes Jahr = 2 Punkte, Abweichung bis 2 Jahre = 1 Punkt, sonst 0.
+// Abwechselnd-Modus: nur eine Person rät pro Song, kein Vergleich moeglich.
+// exaktes Jahr = 3 Punkte, Abweichung bis 3 Jahre = 1 Punkt, sonst 0.
 function calcAlternatingPoints() {
   const correct = state.currentTrack ? state.currentTrack.year : null;
   state.roundPoints = state.players.map(() => 0);
@@ -767,8 +783,8 @@ function calcAlternatingPoints() {
   const guess = Number(state.guesses[state.turnIndexInRound]);
   const diff = Math.abs(guess - correct);
   let points = 0;
-  if (diff === 0) points = 2;
-  else if (diff <= 2) points = 1;
+  if (diff === 0) points = 3;
+  else if (diff <= 3) points = 1;
   state.roundPoints[state.turnIndexInRound] = points;
 }
 
