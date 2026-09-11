@@ -190,6 +190,40 @@
   .final-row .fscore { font-size: 20px; font-weight: 700; color: var(--accent); }
   .final-row.winner { background: var(--accent-bg); border-radius: 8px; padding-left: 10px; padding-right: 10px; margin: 0 -10px; }
   .trophy { font-size: 40px; text-align: center; margin-bottom: 0.5rem; }
+  .playback-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+  }
+  .playback-btn {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: #fff;
+    border: 1px solid var(--border-strong);
+    color: var(--text);
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+  .playback-btn.main {
+    width: 64px;
+    height: 64px;
+    background: var(--spotify);
+    color: #061109;
+    border-color: var(--spotify);
+    font-size: 24px;
+  }
+  .playback-status {
+    font-size: 12px;
+    color: var(--text-muted);
+    text-align: center;
+    margin: 8px 0 0;
+    min-height: 16px;
+  }
 </style>
 </head>
 <body>
@@ -217,7 +251,7 @@ function computeRedirectUri() {
   return window.location.origin + path;
 }
 const REDIRECT_URI = computeRedirectUri();
-const SCOPES = ["user-read-currently-playing"];
+const SCOPES = ["user-read-currently-playing", "user-modify-playback-state"];
 const STORAGE_KEY = "hitster_game_state_v1";
 
 let state = loadState() || {
@@ -436,6 +470,9 @@ function renderSpotifyLogin() {
 function renderGuessing() {
   const wrap = el('<div></div>');
   wrap.appendChild(el('<p class="label">Runde ' + state.round + ' von ' + state.totalRounds + '</p>'));
+
+  wrap.appendChild(renderPlaybackControls());
+
   const card = el('<div class="card"></div>');
   card.appendChild(el('<p class="title">Geschätzte Jahre eingeben</p>'));
   const err = el('<p class="error">Bitte für alle Spieler ein Jahr eingeben</p>');
@@ -465,6 +502,84 @@ function renderGuessing() {
 }
 
 /* ---------- RESOLVING (loading) ---------- */
+/* ---------- PLAYBACK CONTROLS (Play/Pause, Vor, Zurück) ---------- */
+function renderPlaybackControls() {
+  const card = el('<div class="card"></div>');
+  const controls = el('<div class="playback-controls"></div>');
+
+  const prevBtn = el('<button class="playback-btn">⏮</button>');
+  prevBtn.onclick = () => spotifySkip('previous');
+  controls.appendChild(prevBtn);
+
+  const playPauseBtn = el('<button class="playback-btn main">⏯</button>');
+  playPauseBtn.onclick = spotifyTogglePlayPause;
+  controls.appendChild(playPauseBtn);
+
+  const nextBtn = el('<button class="playback-btn">⏭</button>');
+  nextBtn.onclick = () => spotifySkip('next');
+  controls.appendChild(nextBtn);
+
+  card.appendChild(controls);
+  card.appendChild(el('<p class="playback-status" id="playbackStatus"></p>'));
+  return card;
+}
+
+function setPlaybackStatus(text) {
+  const el2 = document.getElementById('playbackStatus');
+  if (el2) el2.textContent = text;
+}
+
+async function spotifyApiCall(path, method) {
+  const token = await getAccessToken();
+  const response = await fetch("https://api.spotify.com/v1" + path, {
+    method,
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  if (response.status === 401) {
+    await refreshAccessToken();
+    return spotifyApiCall(path, method);
+  }
+  if (response.status === 404) {
+    throw new Error("Kein aktives Gerät. Bitte Spotify auf dem Handy öffnen und einen Song starten.");
+  }
+  if (response.status === 403) {
+    throw new Error("Nicht erlaubt (evtl. kein Spotify Premium).");
+  }
+  if (!response.ok && response.status !== 204) {
+    throw new Error("Spotify-Fehler " + response.status);
+  }
+  return response;
+}
+
+async function spotifyTogglePlayPause() {
+  setPlaybackStatus("…");
+  try {
+    const token = await getAccessToken();
+    const stateResp = await fetch("https://api.spotify.com/v1/me/player", {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (stateResp.status === 204) {
+      throw new Error("Kein aktives Gerät. Bitte Spotify auf dem Handy öffnen und einen Song starten.");
+    }
+    const playerData = await stateResp.json();
+    const isPlaying = !!playerData.is_playing;
+    await spotifyApiCall(isPlaying ? "/me/player/pause" : "/me/player/play", "PUT");
+    setPlaybackStatus(isPlaying ? "Pausiert" : "Läuft");
+  } catch (e) {
+    setPlaybackStatus(e.message);
+  }
+}
+
+async function spotifySkip(direction) {
+  setPlaybackStatus("…");
+  try {
+    await spotifyApiCall("/me/player/" + direction, "POST");
+    setPlaybackStatus(direction === "next" ? "Nächster Song gestartet" : "Vorheriger Song gestartet");
+  } catch (e) {
+    setPlaybackStatus(e.message);
+  }
+}
+
 function renderResolving() {
   const wrap = el('<div></div>');
   const card = el('<div class="card" style="text-align:center;"></div>');
