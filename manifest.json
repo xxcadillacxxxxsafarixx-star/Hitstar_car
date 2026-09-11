@@ -1,7 +1,7 @@
 {
   "name": "Hitster Scoreboard",
   "short_name": "Hitster",
-  "start_url": "./index.html",
+  "start_url": "./",
   "display": "standalone",
   "background_color": "#f5f4f0",
   "theme_color": "#1D9E75",
