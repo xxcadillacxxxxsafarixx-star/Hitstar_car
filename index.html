@@ -582,6 +582,15 @@ function renderPlaybackControls() {
 
   card.appendChild(controls);
   card.appendChild(el('<p class="playback-status" id="playbackStatus"></p>'));
+  const reconnectBtn = el('<button class="secondary small" style="width:100%;margin-top:8px;">Spotify neu verbinden</button>');
+  reconnectBtn.onclick = () => {
+    if (confirm('Spotify-Verbindung erneuern? Nötig z.B. wenn Play/Pause "kein Premium" meldet, obwohl du Premium hast (dann fehlt nur die neuere Berechtigung im alten Token). Spielstand bleibt erhalten.')) {
+      spotifyLogout();
+      state.phase = 'spotify-login';
+      render();
+    }
+  };
+  card.appendChild(reconnectBtn);
   return card;
 }
 
@@ -604,7 +613,12 @@ async function spotifyApiCall(path, method) {
     throw new Error("Kein aktives Gerät. Bitte Spotify auf dem Handy öffnen und einen Song starten.");
   }
   if (response.status === 403) {
-    throw new Error("Nicht erlaubt (evtl. kein Spotify Premium).");
+    let detail = "";
+    try {
+      const errBody = await response.json();
+      detail = errBody?.error?.reason || errBody?.error?.message || "";
+    } catch (e) {}
+    throw new Error("Nicht erlaubt" + (detail ? " (" + detail + ")" : " (403, Grund unbekannt)"));
   }
   if (!response.ok && response.status !== 204) {
     throw new Error("Spotify-Fehler " + response.status);
@@ -745,7 +759,7 @@ function calcRoundPoints() {
 }
 
 // Abwechselnd-Modus: nur eine Person rät pro Song, kein Vergleich moeglich.
-// Annahme: exaktes Jahr = 3 Punkte, Abweichung bis 3 Jahre = 1 Punkt, sonst 0.
+// Annahme: exaktes Jahr = 2 Punkte, Abweichung bis 2 Jahre = 1 Punkt, sonst 0.
 function calcAlternatingPoints() {
   const correct = state.currentTrack ? state.currentTrack.year : null;
   state.roundPoints = state.players.map(() => 0);
@@ -753,8 +767,8 @@ function calcAlternatingPoints() {
   const guess = Number(state.guesses[state.turnIndexInRound]);
   const diff = Math.abs(guess - correct);
   let points = 0;
-  if (diff === 0) points = 3;
-  else if (diff <= 3) points = 1;
+  if (diff === 0) points = 2;
+  else if (diff <= 2) points = 1;
   state.roundPoints[state.turnIndexInRound] = points;
 }
 
