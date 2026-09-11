@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="theme-color" content="#1D9E75">
+<meta name="theme-color" content="#0f6e56">
 <title>Hitster Scoreboard</title>
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -21,9 +21,12 @@
     --text-muted: #9a988e;
     --accent: #0f6e56;
     --accent-bg: #e1f5ee;
+    --spotify: #1ed760;
     --radius: 12px;
+    --scorebar-height: 76px;
   }
   * { box-sizing: border-box; }
+  html, body { height: 100%; }
   body {
     margin: 0;
     padding: 1.25rem;
@@ -33,7 +36,7 @@
     max-width: 480px;
     margin-left: auto;
     margin-right: auto;
-    padding-bottom: 3rem;
+    padding-bottom: calc(var(--scorebar-height) + 1.5rem);
   }
   h1 {
     font-size: 20px;
@@ -68,10 +71,7 @@
     font-size: 16px;
     color: var(--text);
   }
-  input:focus {
-    outline: none;
-    border-color: var(--accent);
-  }
+  input:focus { outline: none; border-color: var(--accent); }
   button {
     width: 100%;
     height: 48px;
@@ -84,75 +84,129 @@
     cursor: pointer;
   }
   button:active { transform: scale(0.98); }
-  button.secondary {
-    background: #fff;
-    color: var(--text);
+  button:disabled { opacity: 0.5; }
+  button.spotify { background: var(--spotify); color: #061109; border-color: var(--spotify); }
+  button.secondary { background: #fff; color: var(--text); }
+  button.small {
+    width: auto;
     height: 36px;
     font-size: 13px;
     font-weight: 500;
+    padding: 0 10px;
   }
-  button.secondary.active {
-    border-color: var(--accent);
-    color: var(--accent);
+  button.small.active { border-color: var(--accent); color: var(--accent); background: var(--accent-bg); }
+  .countrow { display: flex; gap: 8px; margin-bottom: 1rem; flex-wrap: wrap; }
+  .countrow button {
+    width: auto;
+    flex: 1;
+    min-width: 44px;
+    height: 44px;
+    background: #fff;
+    color: var(--text);
   }
-  .row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 12px;
-  }
+  .countrow button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
   .row span.pname { font-size: 14px; min-width: 90px; }
-  .error {
-    font-size: 13px;
-    color: #b3261e;
-    margin: 8px 0 0;
-    display: none;
+  .error { font-size: 13px; color: #b3261e; margin: 8px 0 0; display: none; }
+  .track-panel { display: flex; flex-direction: column; align-items: center; text-align: center; }
+  .track-cover {
+    width: 160px; height: 160px; border-radius: 12px;
+    background: #e2e0d8; object-fit: cover; margin-bottom: 1rem;
   }
-  .reveal-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 10px 0;
-    border-top: 1px solid var(--border);
-  }
+  .track-title { font-size: 22px; font-weight: 700; margin: 0 0 4px; }
+  .track-artist { font-size: 16px; color: var(--text-secondary); margin: 0 0 1rem; }
+  .track-year { font-size: 48px; font-weight: 800; color: var(--accent); line-height: 1; margin-bottom: 0.5rem; }
+  .reveal-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 0; border-top: 1px solid var(--border); flex-wrap: wrap; gap: 8px; }
   .reveal-row:first-of-type { border-top: none; }
   .reveal-left { display: flex; flex-direction: column; }
   .reveal-left .pname { font-size: 14px; font-weight: 500; }
   .reveal-left .guess { font-size: 12px; color: var(--text-muted); }
   .points { font-size: 15px; font-weight: 600; color: var(--accent); min-width: 28px; text-align: right; }
-  .scoregrid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0,1fr));
-    gap: 8px;
-    margin-top: 0.5rem;
+  .bonusbtns { display: flex; gap: 6px; }
+  .status-text { font-size: 13px; color: var(--text-muted); margin: 8px 0 0; min-height: 18px; }
+  .scorebar {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    background: #fff;
+    border-top: 1px solid var(--border);
+    padding: 10px 1.25rem calc(10px + env(safe-area-inset-bottom));
+    display: none;
+    z-index: 10;
   }
-  .scorecell {
+  .scorebar.visible { display: block; }
+  .scorebar-inner {
+    max-width: 480px;
+    margin: 0 auto;
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+  }
+  .scorebar-cell {
+    flex: 1;
+    min-width: 64px;
     background: var(--accent-bg);
     border-radius: 8px;
-    padding: 0.75rem;
+    padding: 6px 4px;
     text-align: center;
   }
-  .scorecell.leading { border: 2px solid var(--accent); }
-  .scorecell p { margin: 0; }
-  .scorecell .sname { font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
-  .scorecell .sval { font-size: 20px; font-weight: 700; }
+  .scorebar-cell.leading { border: 2px solid var(--accent); }
+  .scorebar-cell .sname { font-size: 11px; color: var(--text-secondary); margin: 0 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .scorebar-cell .sval { font-size: 17px; font-weight: 700; margin: 0; }
 </style>
 </head>
 <body>
 <h1>Hitster Scoreboard</h1>
 <div id="app"></div>
+<div id="scorebar" class="scorebar"><div id="scorebarInner" class="scorebar-inner"></div></div>
 
 <script>
-let state = {
+/*
+  SPOTIFY EINRICHTEN:
+  1. App unter https://developer.spotify.com/dashboard anlegen (falls noch nicht geschehen).
+  2. Unten bei CLIENT_ID deine Client ID eintragen.
+  3. Im Spotify-Dashboard unter "Redirect URIs" GENAU die URL eintragen, unter der
+     diese Seite läuft (wird unten automatisch erkannt, z.B. deine GitHub-Pages-URL
+     oder http://127.0.0.1:5500/).
+  4. Scope: benötigt "user-read-currently-playing" -> der Track muss auf dem
+     Spotify-Account laufen, mit dem sich die App verbindet (Wiedergabe läuft
+     normal über die Spotify-App weiter, diese Seite liest nur mit).
+*/
+const CLIENT_ID = "d13626a45a624564b714109d1919447e";
+const REDIRECT_URI = window.location.origin + window.location.pathname;
+const SCOPES = ["user-read-currently-playing"];
+const STORAGE_KEY = "hitster_game_state_v1";
+
+let state = loadState() || {
   phase: 'setup',
+  playerCount: 3,
   players: ['', '', ''],
   scores: [0,0,0],
   round: 1,
   guesses: ['', '', ''],
-  correctYear: '',
-  roundPoints: [0,0,0],
-  bonusGiven: [false,false,false]
+  currentTrack: null,
+  roundPoints: [],
+  bonusTitle: [],
+  bonusArtist: []
 };
+
+function saveState() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch(e) {}
+}
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch(e) { return null; }
+}
+function resetGame() {
+  localStorage.removeItem(STORAGE_KEY);
+  state = {
+    phase: 'setup', playerCount: 3, players: ['', '', ''], scores: [0,0,0],
+    round: 1, guesses: ['', '', ''], currentTrack: null, roundPoints: [],
+    bonusTitle: [], bonusArtist: []
+  };
+  render();
+}
 
 function el(html) {
   const d = document.createElement('div');
@@ -161,18 +215,38 @@ function el(html) {
 }
 
 function render() {
+  saveState();
   const app = document.getElementById('app');
   app.innerHTML = '';
   if (state.phase === 'setup') app.appendChild(renderSetup());
+  else if (state.phase === 'spotify-login') app.appendChild(renderSpotifyLogin());
   else if (state.phase === 'guessing') app.appendChild(renderGuessing());
-  else if (state.phase === 'correct') app.appendChild(renderCorrect());
-  else if (state.phase === 'reveal') app.appendChild(renderReveal());
+  else if (state.phase === 'resolving') app.appendChild(renderResolving());
+  else if (state.phase === 'trackreveal') app.appendChild(renderTrackReveal());
+  else if (state.phase === 'scoring') app.appendChild(renderScoring());
+  renderScorebar();
 }
 
+/* ---------- SETUP ---------- */
 function renderSetup() {
   const wrap = el('<div></div>');
   const card = el('<div class="card"></div>');
-  card.appendChild(el('<p class="label">Namen der 3 Spieler eingeben</p>'));
+  card.appendChild(el('<p class="label">Wie viele Spieler?</p>'));
+  const countrow = el('<div class="countrow"></div>');
+  for (let n = 2; n <= 6; n++) {
+    const btn = el('<button class="' + (state.playerCount === n ? 'active' : '') + '">' + n + '</button>');
+    btn.onclick = () => {
+      state.playerCount = n;
+      const newPlayers = Array.from({length: n}, (_, i) => state.players[i] || '');
+      state.players = newPlayers;
+      state.scores = Array.from({length: n}, (_, i) => state.scores[i] || 0);
+      render();
+    };
+    countrow.appendChild(btn);
+  }
+  card.appendChild(countrow);
+
+  card.appendChild(el('<p class="label">Namen eingeben</p>'));
   state.players.forEach((p, i) => {
     const row = el('<div style="margin-bottom:12px;"></div>');
     const input = document.createElement('input');
@@ -183,13 +257,13 @@ function renderSetup() {
     row.appendChild(input);
     card.appendChild(row);
   });
-  const err = el('<p class="error">Bitte alle 3 Namen eingeben</p>');
+  const err = el('<p class="error">Bitte alle Namen eingeben</p>');
   card.appendChild(err);
-  const btn = el('<button style="margin-top:8px;">Spiel starten</button>');
+  const btn = el('<button style="margin-top:8px;">Weiter zu Spotify</button>');
   btn.onclick = () => {
     if (state.players.some(p => !p.trim())) { err.style.display = 'block'; return; }
-    state.guesses = ['', '', ''];
-    state.phase = 'guessing';
+    state.guesses = state.players.map(() => '');
+    state.phase = 'spotify-login';
     render();
   };
   card.appendChild(btn);
@@ -197,6 +271,102 @@ function renderSetup() {
   return wrap;
 }
 
+/* ---------- SPOTIFY LOGIN (PKCE) ---------- */
+function randomString(length = 64) {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
+  const values = crypto.getRandomValues(new Uint8Array(length));
+  return Array.from(values, x => chars[x % chars.length]).join("");
+}
+async function sha256(text) {
+  return crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+}
+function base64UrlEncode(buffer) {
+  return btoa(String.fromCharCode(...new Uint8Array(buffer)))
+    .replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+}
+async function spotifyLogin() {
+  if (!CLIENT_ID || CLIENT_ID === "DEINE_SPOTIFY_CLIENT_ID") {
+    alert("Bitte zuerst CLIENT_ID im Code eintragen.");
+    return;
+  }
+  const verifier = randomString(64);
+  const challenge = base64UrlEncode(await sha256(verifier));
+  const authState = randomString(32);
+  localStorage.setItem("spotify_code_verifier", verifier);
+  localStorage.setItem("spotify_auth_state", authState);
+  const params = new URLSearchParams({
+    client_id: CLIENT_ID,
+    response_type: "code",
+    redirect_uri: REDIRECT_URI,
+    scope: SCOPES.join(" "),
+    code_challenge_method: "S256",
+    code_challenge: challenge,
+    state: authState
+  });
+  location.href = "https://accounts.spotify.com/authorize?" + params.toString();
+}
+async function exchangeCodeForToken(code) {
+  const verifier = localStorage.getItem("spotify_code_verifier");
+  if (!verifier) throw new Error("PKCE Code Verifier fehlt.");
+  const response = await fetch("https://accounts.spotify.com/api/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: CLIENT_ID, grant_type: "authorization_code", code,
+      redirect_uri: REDIRECT_URI, code_verifier: verifier
+    })
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error_description || data.error || "Token-Fehler");
+  saveTokens(data);
+}
+function saveTokens(data) {
+  localStorage.setItem("spotify_access_token", data.access_token);
+  localStorage.setItem("spotify_access_token_expires_at", String(Date.now() + data.expires_in * 1000));
+  if (data.refresh_token) localStorage.setItem("spotify_refresh_token", data.refresh_token);
+}
+async function refreshAccessToken() {
+  const refreshToken = localStorage.getItem("spotify_refresh_token");
+  if (!refreshToken) throw new Error("Kein Refresh Token vorhanden.");
+  const response = await fetch("https://accounts.spotify.com/api/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ client_id: CLIENT_ID, grant_type: "refresh_token", refresh_token: refreshToken })
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error_description || data.error || "Refresh fehlgeschlagen");
+  saveTokens(data);
+  return data.access_token;
+}
+async function getAccessToken() {
+  const token = localStorage.getItem("spotify_access_token");
+  const expiresAt = Number(localStorage.getItem("spotify_access_token_expires_at")) || 0;
+  if (token && Date.now() < expiresAt - 60000) return token;
+  return refreshAccessToken();
+}
+function isSpotifyConnected() {
+  return !!(localStorage.getItem("spotify_access_token") || localStorage.getItem("spotify_refresh_token"));
+}
+function spotifyLogout() {
+  ["spotify_access_token","spotify_access_token_expires_at","spotify_refresh_token","spotify_code_verifier","spotify_auth_state"]
+    .forEach(k => localStorage.removeItem(k));
+}
+
+function renderSpotifyLogin() {
+  const wrap = el('<div></div>');
+  const card = el('<div class="card"></div>');
+  card.appendChild(el('<p class="title">Mit Spotify verbinden</p>'));
+  card.appendChild(el('<p class="status-text" style="margin-bottom:1rem;">Nötig, um Titel, Interpret und Jahr des laufenden Songs automatisch zu erkennen. Die Wiedergabe läuft weiter ganz normal über die Spotify-App.</p>'));
+  const btn = el('<button class="spotify">Mit Spotify verbinden</button>');
+  btn.onclick = spotifyLogin;
+  card.appendChild(btn);
+  const err = el('<p class="error" id="spotifyErr"></p>');
+  card.appendChild(err);
+  wrap.appendChild(card);
+  return wrap;
+}
+
+/* ---------- GUESSING ---------- */
 function renderGuessing() {
   const wrap = el('<div></div>');
   wrap.appendChild(el('<p class="label">Runde ' + state.round + '</p>'));
@@ -210,53 +380,110 @@ function renderGuessing() {
     input.type = 'number';
     input.inputMode = 'numeric';
     input.placeholder = 'Jahr';
-    input.value = state.guesses[i];
+    input.value = state.guesses[i] || '';
     input.oninput = (e) => { state.guesses[i] = e.target.value; err.style.display='none'; };
     row.appendChild(input);
     card.appendChild(row);
   });
   card.appendChild(err);
-  const btn = el('<button style="margin-top:4px;">Weiter</button>');
+  const btn = el('<button style="margin-top:4px;">Auflösen</button>');
   btn.onclick = () => {
     if (state.guesses.some(g => g === '' || isNaN(Number(g)))) { err.style.display = 'block'; return; }
-    state.correctYear = '';
-    state.phase = 'correct';
+    state.phase = 'resolving';
     render();
+    fetchCurrentTrack();
   };
   card.appendChild(btn);
   wrap.appendChild(card);
   return wrap;
 }
 
-function renderCorrect() {
+/* ---------- RESOLVING (loading) ---------- */
+function renderResolving() {
+  const wrap = el('<div></div>');
+  const card = el('<div class="card" style="text-align:center;"></div>');
+  card.appendChild(el('<p class="title">Track wird abgefragt …</p>'));
+  card.appendChild(el('<p class="status-text" id="resolveStatus">Einen Moment</p>'));
+  wrap.appendChild(card);
+  return wrap;
+}
+
+async function fetchCurrentTrack() {
+  const statusEl = () => document.getElementById('resolveStatus');
+  try {
+    const token = await getAccessToken();
+    const response = await fetch("https://api.spotify.com/v1/me/player/currently-playing", {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (response.status === 204) {
+      if (statusEl()) statusEl().textContent = "Aktuell läuft kein Track auf Spotify. Song starten und nochmal versuchen.";
+      showRetryButton();
+      return;
+    }
+    if (response.status === 401) {
+      await refreshAccessToken();
+      return fetchCurrentTrack();
+    }
+    if (!response.ok) throw new Error("Spotify API Fehler " + response.status);
+    const data = await response.json();
+    if (!data.item || data.currently_playing_type !== "track") {
+      if (statusEl()) statusEl().textContent = "Kein Musik-Track erkannt.";
+      showRetryButton();
+      return;
+    }
+    const track = data.item;
+    const releaseDate = track.album?.release_date || "";
+    const year = releaseDate ? Number(releaseDate.slice(0,4)) : null;
+    state.currentTrack = {
+      title: track.name,
+      artist: track.artists?.map(a => a.name).join(", ") || "Unbekannt",
+      year: year,
+      cover: track.album?.images?.[0]?.url || ""
+    };
+    calcRoundPoints();
+    state.bonusTitle = state.players.map(() => false);
+    state.bonusArtist = state.players.map(() => false);
+    state.phase = 'trackreveal';
+    render();
+  } catch (error) {
+    console.error(error);
+    if (statusEl()) statusEl().textContent = "Fehler: " + error.message;
+    showRetryButton();
+  }
+}
+
+function showRetryButton() {
+  const card = document.querySelector('#app .card');
+  if (!card || document.getElementById('retryBtn')) return;
+  const retry = el('<button id="retryBtn" style="margin-top:12px;">Erneut versuchen</button>');
+  retry.onclick = () => { render(); fetchCurrentTrack(); };
+  card.appendChild(retry);
+  const back = el('<button id="backBtn" class="secondary" style="margin-top:8px;">Zurück zur Jahreseingabe</button>');
+  back.onclick = () => { state.phase = 'guessing'; render(); };
+  card.appendChild(back);
+}
+
+/* ---------- TRACK REVEAL ---------- */
+function renderTrackReveal() {
   const wrap = el('<div></div>');
   wrap.appendChild(el('<p class="label">Runde ' + state.round + '</p>'));
-  const card = el('<div class="card"></div>');
-  card.appendChild(el('<p class="title">Richtiges Jahr eingeben</p>'));
-  const input = document.createElement('input');
-  input.type = 'number';
-  input.inputMode = 'numeric';
-  input.placeholder = 'Jahr laut Spotify';
-  input.value = state.correctYear;
-  const err = el('<p class="error">Bitte ein Jahr eingeben</p>');
-  input.oninput = (e) => { state.correctYear = e.target.value; err.style.display='none'; };
-  card.appendChild(input);
-  card.appendChild(err);
-  const btn = el('<button style="margin-top:12px;">Punkte berechnen</button>');
-  btn.onclick = () => {
-    if (state.correctYear === '' || isNaN(Number(state.correctYear))) { err.style.display = 'block'; return; }
-    calcRoundPoints();
-    state.bonusGiven = [false,false,false];
-    state.phase = 'reveal';
-    render();
-  };
-  card.appendChild(btn);
+  const card = el('<div class="card track-panel"></div>');
+  const t = state.currentTrack;
+  if (t.cover) card.appendChild(el('<img class="track-cover" src="' + t.cover + '" alt="Cover">'));
+  card.appendChild(el('<p class="track-title">' + escapeHtml(t.title) + '</p>'));
+  card.appendChild(el('<p class="track-artist">' + escapeHtml(t.artist) + '</p>'));
+  card.appendChild(el('<p class="track-year">' + (t.year || '????') + '</p>'));
   wrap.appendChild(card);
+  const btn = el('<button>Weiter zu Punkten</button>');
+  btn.onclick = () => { state.phase = 'scoring'; render(); };
+  wrap.appendChild(btn);
   return wrap;
 }
 
+/* ---------- SCORING ---------- */
 function calcRoundPoints() {
-  const correct = Number(state.correctYear);
+  const correct = state.currentTrack ? state.currentTrack.year : null;
+  if (correct === null) { state.roundPoints = state.players.map(() => 0); return; }
   const diffs = state.guesses.map(g => Math.abs(Number(g) - correct));
   const sorted = [...diffs].sort((a,b) => a-b);
   const best = sorted[0];
@@ -268,29 +495,33 @@ function calcRoundPoints() {
   });
 }
 
-function renderReveal() {
+function renderScoring() {
   const wrap = el('<div></div>');
-  wrap.appendChild(el('<p class="label">Runde ' + state.round + ' &middot; richtig: ' + state.correctYear + '</p>'));
+  const t = state.currentTrack;
+  wrap.appendChild(el('<p class="label">Runde ' + state.round + ' &middot; ' + escapeHtml(t.title) + ' &ndash; ' + escapeHtml(t.artist) + ' (' + (t.year || '????') + ')</p>'));
   const card = el('<div class="card"></div>');
   card.appendChild(el('<p class="title">Rundenpunkte</p>'));
   state.players.forEach((p, i) => {
     const row = el('<div class="reveal-row"></div>');
     const left = el('<div class="reveal-left"></div>');
-    left.appendChild(el('<span class="pname">' + p + '</span>'));
+    left.appendChild(el('<span class="pname">' + escapeHtml(p) + '</span>'));
     left.appendChild(el('<span class="guess">Geschätzt: ' + state.guesses[i] + '</span>'));
     row.appendChild(left);
-    const right = el('<div style="display:flex;align-items:center;gap:8px;"></div>');
-    right.appendChild(el('<span class="points">+' + state.roundPoints[i] + '</span>'));
-    const bonusBtn = document.createElement('button');
-    bonusBtn.className = 'secondary' + (state.bonusGiven[i] ? ' active' : '');
-    bonusBtn.style.width = 'auto';
-    bonusBtn.style.padding = '0 10px';
-    bonusBtn.textContent = state.bonusGiven[i] ? 'Bonus ✓' : 'Titel+Interpret';
-    bonusBtn.onclick = () => {
-      state.bonusGiven[i] = !state.bonusGiven[i];
-      render();
-    };
-    right.appendChild(bonusBtn);
+
+    const right = el('<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;"></div>');
+    const totalBonus = (state.bonusTitle[i] ? 1 : 0) + (state.bonusArtist[i] ? 1 : 0);
+    const pointsSpan = el('<span class="points">+' + (state.roundPoints[i] + totalBonus) + '</span>');
+    right.appendChild(pointsSpan);
+
+    const bonusWrap = el('<div class="bonusbtns"></div>');
+    const titleBtn = el('<button class="small' + (state.bonusTitle[i] ? ' active' : '') + '">Titel ' + (state.bonusTitle[i] ? '✓' : '+1') + '</button>');
+    titleBtn.onclick = () => { state.bonusTitle[i] = !state.bonusTitle[i]; render(); };
+    const artistBtn = el('<button class="small' + (state.bonusArtist[i] ? ' active' : '') + '">Interpret ' + (state.bonusArtist[i] ? '✓' : '+1') + '</button>');
+    artistBtn.onclick = () => { state.bonusArtist[i] = !state.bonusArtist[i]; render(); };
+    bonusWrap.appendChild(titleBtn);
+    bonusWrap.appendChild(artistBtn);
+    right.appendChild(bonusWrap);
+
     row.appendChild(right);
     card.appendChild(row);
   });
@@ -299,39 +530,93 @@ function renderReveal() {
   const nextBtn = el('<button>Nächste Runde</button>');
   nextBtn.onclick = () => {
     state.players.forEach((p, i) => {
-      state.scores[i] += state.roundPoints[i] + (state.bonusGiven[i] ? 2 : 0);
+      state.scores[i] += state.roundPoints[i] + (state.bonusTitle[i] ? 1 : 0) + (state.bonusArtist[i] ? 1 : 0);
     });
     state.round += 1;
-    state.guesses = ['', '', ''];
+    state.guesses = state.players.map(() => '');
+    state.currentTrack = null;
     state.phase = 'guessing';
     render();
   };
   wrap.appendChild(nextBtn);
-
-  const scoreWrap = el('<div style="margin-top:1.25rem;"></div>');
-  scoreWrap.appendChild(el('<p class="label">Gesamtstand</p>'));
-  const grid = el('<div class="scoregrid"></div>');
-  const maxScore = Math.max(...state.scores);
-  state.players.forEach((p, i) => {
-    const leading = state.scores[i] === maxScore && maxScore > 0;
-    const cell = el('<div class="scorecell' + (leading ? ' leading' : '') + '"></div>');
-    cell.appendChild(el('<p class="sname">' + p + '</p>'));
-    cell.appendChild(el('<p class="sval">' + state.scores[i] + '</p>'));
-    grid.appendChild(cell);
-  });
-  scoreWrap.appendChild(grid);
-  wrap.appendChild(scoreWrap);
-
   return wrap;
 }
 
-render();
+/* ---------- PERSISTENT SCOREBAR ---------- */
+function renderScorebar() {
+  const bar = document.getElementById('scorebar');
+  const inner = document.getElementById('scorebarInner');
+  const showBar = ['guessing','resolving','trackreveal','scoring'].includes(state.phase);
+  bar.classList.toggle('visible', showBar);
+  if (!showBar) return;
+  inner.innerHTML = '';
+  const maxScore = Math.max(...state.scores);
+  state.players.forEach((p, i) => {
+    const leading = state.scores[i] === maxScore && maxScore > 0;
+    const cell = el('<div class="scorebar-cell' + (leading ? ' leading' : '') + '"></div>');
+    cell.appendChild(el('<p class="sname">' + escapeHtml(p) + '</p>'));
+    cell.appendChild(el('<p class="sval">' + state.scores[i] + '</p>'));
+    inner.appendChild(cell);
+  });
+}
+
+function escapeHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str == null ? '' : String(str);
+  return d.innerHTML;
+}
+
+/* ---------- INIT (handles Spotify OAuth redirect) ---------- */
+async function init() {
+  const params = new URLSearchParams(location.search);
+  const code = params.get("code");
+  const returnedState = params.get("state");
+  const error = params.get("error");
+
+  if (error) {
+    history.replaceState({}, "", REDIRECT_URI);
+    render();
+    if (state.phase === 'spotify-login') {
+      const err = document.getElementById('spotifyErr');
+      if (err) { err.style.display = 'block'; err.textContent = "Spotify-Anmeldung abgebrochen: " + error; }
+    }
+    return;
+  }
+
+  if (code) {
+    try {
+      const expectedState = localStorage.getItem("spotify_auth_state");
+      if (!returnedState || returnedState !== expectedState) throw new Error("OAuth state stimmt nicht überein.");
+      await exchangeCodeForToken(code);
+      localStorage.removeItem("spotify_code_verifier");
+      localStorage.removeItem("spotify_auth_state");
+      history.replaceState({}, "", REDIRECT_URI);
+      if (state.phase === 'spotify-login') state.phase = 'guessing';
+      render();
+      return;
+    } catch (e) {
+      console.error(e);
+      history.replaceState({}, "", REDIRECT_URI);
+      render();
+      const err = document.getElementById('spotifyErr');
+      if (err) { err.style.display = 'block'; err.textContent = "Login-Fehler: " + e.message; }
+      return;
+    }
+  }
+
+  if (state.phase === 'spotify-login' && isSpotifyConnected()) {
+    state.phase = 'guessing';
+  }
+  render();
+}
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   });
 }
+
+init();
 </script>
 </body>
 </html>
