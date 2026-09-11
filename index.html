@@ -256,11 +256,13 @@ const STORAGE_KEY = "hitster_game_state_v1";
 
 let state = loadState() || {
   phase: 'setup',
+  gameMode: 'simultaneous',
   playerCount: 3,
   players: ['', '', ''],
   scores: [0,0,0],
   totalRounds: 10,
   round: 1,
+  turnIndexInRound: 0,
   guesses: ['', '', ''],
   currentTrack: null,
   roundPoints: [],
@@ -280,8 +282,8 @@ function loadState() {
 function resetGame() {
   localStorage.removeItem(STORAGE_KEY);
   state = {
-    phase: 'setup', playerCount: 3, players: ['', '', ''], scores: [0,0,0],
-    totalRounds: 10, round: 1, guesses: ['', '', ''], currentTrack: null,
+    phase: 'setup', gameMode: 'simultaneous', playerCount: 3, players: ['', '', ''], scores: [0,0,0],
+    totalRounds: 10, round: 1, turnIndexInRound: 0, guesses: ['', '', ''], currentTrack: null,
     roundPoints: [], bonusTitle: [], bonusArtist: []
   };
   render();
@@ -317,6 +319,21 @@ function render() {
 function renderSetup() {
   const wrap = el('<div></div>');
   const card = el('<div class="card"></div>');
+
+  card.appendChild(el('<p class="label">Spielmodus</p>'));
+  const modeRow = el('<div class="countrow"></div>');
+  const simBtn = el('<button class="' + (state.gameMode === 'simultaneous' ? 'active' : '') + '" style="flex-basis:48%;">Gleichzeitig</button>');
+  simBtn.onclick = () => { state.gameMode = 'simultaneous'; render(); };
+  const altBtn = el('<button class="' + (state.gameMode === 'alternating' ? 'active' : '') + '" style="flex-basis:48%;">Abwechselnd</button>');
+  altBtn.onclick = () => { state.gameMode = 'alternating'; render(); };
+  modeRow.appendChild(simBtn);
+  modeRow.appendChild(altBtn);
+  card.appendChild(modeRow);
+  const modeHint = state.gameMode === 'alternating'
+    ? 'Reihum: bei jedem Song rät nur eine Person das Jahr, danach ist die nächste Person am nächsten Song dran.'
+    : 'Alle Spieler schätzen gleichzeitig das Jahr desselben Songs, wer am nächsten dran ist bekommt die meisten Punkte.';
+  card.appendChild(el('<p class="status-text" style="margin-bottom:1rem;">' + modeHint + '</p>'));
+
   card.appendChild(el('<p class="label">Wie viele Spieler?</p>'));
   const countrow = el('<div class="countrow"></div>');
   for (let n = 2; n <= 6; n++) {
@@ -345,6 +362,9 @@ function renderSetup() {
   const roundRow = el('<div style="margin-bottom:1rem;"></div>');
   roundRow.appendChild(roundSelect);
   card.appendChild(roundRow);
+  if (state.gameMode === 'alternating') {
+    card.appendChild(el('<p class="status-text" style="margin-top:-0.5rem;margin-bottom:1rem;">Eine Runde = jeder Spieler ist einmal dran (bei ' + state.playerCount + ' Spielern also ' + state.playerCount + ' Songs pro Runde).</p>'));
+  }
 
   card.appendChild(el('<p class="label">Namen eingeben</p>'));
   state.players.forEach((p, i) => {
@@ -363,6 +383,8 @@ function renderSetup() {
   btn.onclick = () => {
     if (state.players.some(p => !p.trim())) { err.style.display = 'block'; return; }
     state.guesses = state.players.map(() => '');
+    state.round = 1;
+    state.turnIndexInRound = 0;
     state.phase = 'spotify-login';
     render();
   };
@@ -468,6 +490,11 @@ function renderSpotifyLogin() {
 
 /* ---------- GUESSING ---------- */
 function renderGuessing() {
+  if (state.gameMode === 'alternating') return renderGuessingAlternating();
+  return renderGuessingSimultaneous();
+}
+
+function renderGuessingSimultaneous() {
   const wrap = el('<div></div>');
   wrap.appendChild(el('<p class="label">Runde ' + state.round + ' von ' + state.totalRounds + '</p>'));
 
@@ -492,6 +519,40 @@ function renderGuessing() {
   const btn = el('<button style="margin-top:4px;">Auflösen</button>');
   btn.onclick = () => {
     if (state.guesses.some(g => g === '' || isNaN(Number(g)))) { err.style.display = 'block'; return; }
+    state.phase = 'resolving';
+    render();
+    fetchCurrentTrack();
+  };
+  card.appendChild(btn);
+  wrap.appendChild(card);
+  return wrap;
+}
+
+function renderGuessingAlternating() {
+  const wrap = el('<div></div>');
+  const currentPlayer = state.players[state.turnIndexInRound];
+  wrap.appendChild(el('<p class="label">Runde ' + state.round + ' von ' + state.totalRounds + ' &middot; Song ' + (state.turnIndexInRound + 1) + '/' + state.playerCount + '</p>'));
+
+  wrap.appendChild(renderPlaybackControls());
+
+  const card = el('<div class="card"></div>');
+  card.appendChild(el('<p class="title">' + escapeHtml(currentPlayer) + ' ist dran</p>'));
+  const err = el('<p class="error">Bitte ein Jahr eingeben</p>');
+  const row = el('<div class="row"></div>');
+  row.appendChild(el('<span class="pname">' + escapeHtml(currentPlayer) + '</span>'));
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.inputMode = 'numeric';
+  input.placeholder = 'Jahr';
+  input.value = state.guesses[state.turnIndexInRound] || '';
+  input.oninput = (e) => { state.guesses[state.turnIndexInRound] = e.target.value; err.style.display='none'; };
+  row.appendChild(input);
+  card.appendChild(row);
+  card.appendChild(err);
+  const btn = el('<button style="margin-top:4px;">Auflösen</button>');
+  btn.onclick = () => {
+    const g = state.guesses[state.turnIndexInRound];
+    if (g === '' || g === undefined || isNaN(Number(g))) { err.style.display = 'block'; return; }
     state.phase = 'resolving';
     render();
     fetchCurrentTrack();
@@ -621,7 +682,11 @@ async function fetchCurrentTrack() {
       year: year,
       cover: track.album?.images?.[0]?.url || ""
     };
-    calcRoundPoints();
+    if (state.gameMode === 'alternating') {
+      calcAlternatingPoints();
+    } else {
+      calcRoundPoints();
+    }
     state.bonusTitle = state.players.map(() => false);
     state.bonusArtist = state.players.map(() => false);
     state.phase = 'trackreveal';
@@ -647,7 +712,10 @@ function showRetryButton() {
 /* ---------- TRACK REVEAL ---------- */
 function renderTrackReveal() {
   const wrap = el('<div></div>');
-  wrap.appendChild(el('<p class="label">Runde ' + state.round + ' von ' + state.totalRounds + '</p>'));
+  const label = state.gameMode === 'alternating'
+    ? 'Runde ' + state.round + ' von ' + state.totalRounds + ' &middot; ' + escapeHtml(state.players[state.turnIndexInRound]) + ' war dran'
+    : 'Runde ' + state.round + ' von ' + state.totalRounds;
+  wrap.appendChild(el('<p class="label">' + label + '</p>'));
   const card = el('<div class="card track-panel"></div>');
   const t = state.currentTrack;
   if (t.cover) card.appendChild(el('<img class="track-cover" src="' + t.cover + '" alt="Cover">'));
@@ -676,7 +744,26 @@ function calcRoundPoints() {
   });
 }
 
+// Abwechselnd-Modus: nur eine Person rät pro Song, kein Vergleich moeglich.
+// Annahme: exaktes Jahr = 3 Punkte, Abweichung bis 3 Jahre = 1 Punkt, sonst 0.
+function calcAlternatingPoints() {
+  const correct = state.currentTrack ? state.currentTrack.year : null;
+  state.roundPoints = state.players.map(() => 0);
+  if (correct === null) return;
+  const guess = Number(state.guesses[state.turnIndexInRound]);
+  const diff = Math.abs(guess - correct);
+  let points = 0;
+  if (diff === 0) points = 3;
+  else if (diff <= 3) points = 1;
+  state.roundPoints[state.turnIndexInRound] = points;
+}
+
 function renderScoring() {
+  if (state.gameMode === 'alternating') return renderScoringAlternating();
+  return renderScoringSimultaneous();
+}
+
+function renderScoringSimultaneous() {
   const wrap = el('<div></div>');
   const t = state.currentTrack;
   wrap.appendChild(el('<p class="label">Runde ' + state.round + ' von ' + state.totalRounds + ' &middot; ' + escapeHtml(t.title) + ' &ndash; ' + escapeHtml(t.artist) + ' (' + (t.year || '????') + ')</p>'));
@@ -721,6 +808,64 @@ function renderScoring() {
     }
     state.round += 1;
     state.guesses = state.players.map(() => '');
+    state.currentTrack = null;
+    state.phase = 'guessing';
+    render();
+  };
+  wrap.appendChild(nextBtn);
+  return wrap;
+}
+
+function renderScoringAlternating() {
+  const wrap = el('<div></div>');
+  const t = state.currentTrack;
+  const i = state.turnIndexInRound;
+  const currentPlayer = state.players[i];
+  wrap.appendChild(el('<p class="label">Runde ' + state.round + ' von ' + state.totalRounds + ' &middot; ' + escapeHtml(t.title) + ' &ndash; ' + escapeHtml(t.artist) + ' (' + (t.year || '????') + ')</p>'));
+  const card = el('<div class="card"></div>');
+  card.appendChild(el('<p class="title">Punkte für ' + escapeHtml(currentPlayer) + '</p>'));
+
+  const row = el('<div class="reveal-row"></div>');
+  const left = el('<div class="reveal-left"></div>');
+  left.appendChild(el('<span class="pname">' + escapeHtml(currentPlayer) + '</span>'));
+  left.appendChild(el('<span class="guess">Geschätzt: ' + state.guesses[i] + '</span>'));
+  row.appendChild(left);
+
+  const right = el('<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;"></div>');
+  const totalBonus = (state.bonusTitle[i] ? 1 : 0) + (state.bonusArtist[i] ? 1 : 0);
+  const pointsSpan = el('<span class="points">+' + (state.roundPoints[i] + totalBonus) + '</span>');
+  right.appendChild(pointsSpan);
+
+  const bonusWrap = el('<div class="bonusbtns"></div>');
+  const titleBtn = el('<button class="small' + (state.bonusTitle[i] ? ' active' : '') + '">Titel ' + (state.bonusTitle[i] ? '✓' : '+1') + '</button>');
+  titleBtn.onclick = () => { state.bonusTitle[i] = !state.bonusTitle[i]; render(); };
+  const artistBtn = el('<button class="small' + (state.bonusArtist[i] ? ' active' : '') + '">Interpret ' + (state.bonusArtist[i] ? '✓' : '+1') + '</button>');
+  artistBtn.onclick = () => { state.bonusArtist[i] = !state.bonusArtist[i]; render(); };
+  bonusWrap.appendChild(titleBtn);
+  bonusWrap.appendChild(artistBtn);
+  right.appendChild(bonusWrap);
+
+  row.appendChild(right);
+  card.appendChild(row);
+  wrap.appendChild(card);
+
+  const isLastTurnOfRound = state.turnIndexInRound >= state.playerCount - 1;
+  const isLastTurnOfGame = isLastTurnOfRound && state.round >= state.totalRounds;
+  const nextBtn = el('<button>' + (isLastTurnOfGame ? 'Spiel beenden' : 'Weiter') + '</button>');
+  nextBtn.onclick = () => {
+    state.scores[i] += state.roundPoints[i] + (state.bonusTitle[i] ? 1 : 0) + (state.bonusArtist[i] ? 1 : 0);
+    if (isLastTurnOfGame) {
+      state.phase = 'gameover';
+      render();
+      return;
+    }
+    if (isLastTurnOfRound) {
+      state.turnIndexInRound = 0;
+      state.round += 1;
+      state.guesses = state.players.map(() => '');
+    } else {
+      state.turnIndexInRound += 1;
+    }
     state.currentTrack = null;
     state.phase = 'guessing';
     render();
