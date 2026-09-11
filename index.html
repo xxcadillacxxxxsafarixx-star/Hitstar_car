@@ -289,6 +289,7 @@ async function spotifyLogin() {
     alert("Bitte zuerst CLIENT_ID im Code eintragen.");
     return;
   }
+  alert("REDIRECT_URI die gerade gesendet wird:\n\n" + REDIRECT_URI + "\n\nBitte 1:1 mit dem Eintrag im Spotify Dashboard vergleichen (inkl. http/https, Slash am Ende, Groß-/Kleinschreibung).");
   const verifier = randomString(64);
   const challenge = base64UrlEncode(await sha256(verifier));
   const authState = randomString(32);
